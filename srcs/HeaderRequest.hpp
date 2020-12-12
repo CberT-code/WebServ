@@ -41,13 +41,13 @@ class HeaderRequest {
 		}
 		void											basicHeaderFormat(Request *req){
 			this->addContent("Host", (req->get_host() + ":" + req->get_port()));
-			this->updateContent("Content-Location", req->get_uri());
+			//this->updateContent("Content-Location", req->get_uri());
 			this->addContent("Server", "webserv");
 			this->addContent("Date", getTime());
-			this->updateContent("Content-Type", "text/html");
-			if (req->getMimeType(req->getExtension()) != "")
-				this->updateContent("Content-Type", req->getMimeType(req->getExtension()));
-			this->updateContent("Accept-Charset", "utf-8");
+			//this->updateContent("Content-Type", "text/html");
+			//if (req->getMimeType(req->getExtension()) != "")
+			//	this->updateContent("Content-Type", req->getMimeType(req->getExtension()));
+			//this->updateContent("Accept-Charset", "utf-8");
 		}
 		void											basicHistory(VirtualServer *vserv, Request *req){
 			if (vserv->get_history((req->get_IpClient() + req->get_userAgent())) != "")
@@ -56,6 +56,8 @@ class HeaderRequest {
 				this->updateContent("Content-Length", NumberToString(getSizeFileBits(vserv->get_root()[0] + req->get_uri())));
 		}
 		void											Error405HeaderFormat(Request *req, std::string allowMethods){
+			(void)req;
+			(void)allowMethods;
 			this->basicHeaderFormat(req);
 			this->updateContent("HTTP/1.1", "405 Method Not Allowed");
 			this->updateContent("Content-Type", "text/html");

@@ -340,8 +340,11 @@ class Execution
 			std::vector<std::map<std::string, std::vector<std::string> > > locations = this->vserv->get_locations();
 			std::string														ret;
 			if (!indexs.empty()) {
-				for (size_t j = 0; j < locations[indexs[0]]["method"].size(); j++)
-					ret += (" " + locations[indexs[0]]["method"][j] + ",");
+				for (size_t j = 0; j < locations[indexs[0]]["method"].size(); j++) {
+					ret += (locations[indexs[0]]["method"][j] + " ");
+					if (j != locations[indexs[0]]["method"].size() - 1)
+						ret += ", ";
+				}
 				ret.erase(ret.size() - 1);
 				return (ret);
 			} else {
