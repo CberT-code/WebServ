@@ -44,6 +44,7 @@ class HeaderRequest {
 			this->updateContent("Content-Location", req->get_uri());
 			this->addContent("Server", "webserv");
 			this->addContent("Date", getTime());
+			this->updateContent("Content-Type", "text/html");
 			if (req->getMimeType(req->getExtension()) != "")
 				this->updateContent("Content-Type", req->getMimeType(req->getExtension()));
 			this->updateContent("Accept-Charset", "utf-8");
@@ -61,7 +62,6 @@ class HeaderRequest {
 			this->addContent("Allow", allowMethods);
 		}
 		void											RedirectionHeaderFormat(Request *req, std::string uri){
-			std::cout << "REDIRECTION HEADER FORMAT" << std::endl;
 			this->basicHeaderFormat(req);
 			this->updateContent("HTTP/1.1", "301 Moved Permanently");
 			this->updateContent("Content-Type", "text/html");
