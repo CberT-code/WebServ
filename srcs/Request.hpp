@@ -61,6 +61,10 @@ class Request{
 				return (0);
 			if (this->_request.find("Transfer-Encoding") != SIZE_MAX && this->_request.rfind("\r\n\r\n") == this->_request.find("\r\n\r\n"))
 				return (0);
+			if (this->_request.find("Content-Length") != SIZE_MAX && this->_request.rfind("\r\n\r\n") == this->_request.find("\r\n\r\n"))
+				return (0);
+			this->_request = CleanBody(this->_request);
+			// std::cout << RED << this->_request << RESET << std::endl;
 			this->_method = this->set_method();
 
 			this->_parsing->parsingMap((char *)this->_request.c_str());
@@ -255,6 +259,8 @@ class Request{
 		}
 
 		std::string									parsingPut(void) {
+			std::string content;
+			content = &this->_request[this->_request.find("\r\n\r\n") + 4];
 			std::string content = "";
 			if (this->_request.find("\n\r") != SIZE_MAX)
 				content = &this->_request[this->_request.find("\n\r") + 3];
