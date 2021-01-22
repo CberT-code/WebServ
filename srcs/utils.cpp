@@ -34,7 +34,7 @@ std::string							fileToString(std::string file){
 std::ifstream	ifs(file.c_str());
 
 	if (ifs.fail()){
-		std::cerr << "Reading Error" << std::endl;
+		std::cerr << "Reading Error 2" << std::endl;
 		return (fileToString);
 	}
 	while (std::getline(ifs, line)){
@@ -97,6 +97,7 @@ std::vector<std::string>			listFilesInFolder(std::string repos){
 			ret.push_back(entry->d_name);
 		} 
 	}
+	closedir(folder);
 	return (ret);
 }
 char 								**mergeArrays(char **tab1, char **tab2, int freeOption){
@@ -141,10 +142,8 @@ long long unsigned int				getSizeFileBits(std::string filename) {
 	long long unsigned int ret = 0;
 	
 	opfile.open(filename.c_str(), std::ios::in);
-	if (!opfile.is_open()) {
-		opfile.close();
+	if (!opfile.is_open())
 		return (0);
-	}
 	opfile.seekg(0, std::ios::end);
 	ret = opfile.tellg();
 	opfile.close();
@@ -180,25 +179,47 @@ std::string							getfilename(std::string uri) {
 	ret = &uri[uri.find_last_of("/") + 1];
 	return (ret);
 }
-std::string							CleanBody(std::string request){
+
+std::string							CleanBody(std::string request, std::string contentType){
 	std::string body;
 
-	if (request.find("\r\n\r\n") != request.rfind("\r\n\r\n")){
-		body = request.substr(request.find("\r\n\r\n") + 2, request.rfind("\r\n\r\n") + 4);
-		std::cout << "BODY JUST RECUP" << std::endl << body << std::endl;
-		while (body.find("\r\n\r\n") != body.find("\r\n")){
-
-
-			if (body.find("\r\n\r\n") == body.find("\r\n", body.find("\r\n")))
-				body.erase(body.find("\r\n"), body.find("\r\n", body.find("\r\n")));
-			else
-				body.erase(body.find("\r\n"), body.find("\r\n", body.find("\r\n")) + 2);
-
-				
+	if (request.find("\r\n\r\n") != request.rfind("\r\n\r\n") || (request.find("\r\n\r\n") != request.rfind("\n") && request.rfind("\n") != SIZE_MAX )){
+		if (contentType.find("boundary=") != SIZE_MAX && contentType.find("multipart/form-data;") != SIZE_MAX) {
+			body = request.substr(request.find("\r\n\r\n") + 2, request.rfind("\r\n\r\n"));
+		} else if (request.find("\r\n\r\n") != request.rfind("\r\n\r\n")){
+			body = request.substr(request.find("\r\n\r\n") + 2, request.rfind("\r\n\r\n"));
+			std::vector<std::string> bodyvec = split(body, "\r\n");
+			body = "";
+			for (size_t i = 1; i < bodyvec.size(); i += 2){
+				body += bodyvec[i];
+			}
 		}
-		std::cout << "BODY AFTER CLEAN RECUP" << std::endl << body << std::endl;
-		request.replace(request.find("\r\n\r\n") + 4, request.rfind("\r\n\r\n"), body);
+		else
+			body = request.substr(request.find("\r\n\r\n") + 4, request.rfind("\n"));
 	}
-		std::cout << "REQUEST AFTER CLEAN" << std::endl << request << std::endl;
-	return (request);
+	return (body);
+}
+std::string decode64(const std::string &in)
+{
+
+	std::string out;
+
+	std::vector<int> T(256, -1);
+	for (int i = 0; i < 64; i++)
+		T["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[i]] = i;
+
+	int val = 0, valb = -8;
+	for (size_t i = 0; in[i]; i++)
+	{
+		if (T[in[i]] == -1)
+			break;
+		val = (val << 6) + T[in[i]];
+		valb += 6;
+		if (valb >= 0)
+		{
+			out.push_back(char((val >> valb) & 0xFF));
+			valb -= 8;
+		}
+	}
+	return out;
 }

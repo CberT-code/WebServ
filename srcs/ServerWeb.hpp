@@ -10,12 +10,14 @@ class ServerWeb
 	public:
 		ServerWeb(void){
 			this->_fdmax = 0;
+			this->_nbActivity = 0;
+			this->getContentType();
 		}
 		ServerWeb(ServerWeb const &rhs){
 			operator=(rhs);
 		}
 		virtual ~ServerWeb(void){}
-		ServerWeb &														operator=( ServerWeb const &rhs){
+		ServerWeb &														operator=(ServerWeb const &rhs){
 			if (this != &rhs){
 			}
 			return (*this);
@@ -33,11 +35,32 @@ class ServerWeb
 		int																get_fdmax(void){
 			return (this->_fdmax);
 		}
+		int																get_nbActivity(void){
+			return (this->_nbActivity);
+		}
 		fd_set *														get_readfds(void){
 			return (&this->_readfds);
 		}
 		fd_set *														get_writefds(void){
 			return (&this->_writefds);
+		}
+		std::map<std::string, std::string>								get_mimesTypes(void){
+			return (this->_mimesTypes);
+		}
+		void															getContentType(void){
+			std::string line;
+			std::ifstream	ifs("srcs/mime.types");
+			std::vector<std::string> res;
+			if (ifs.fail()){
+				std::cerr << "Reading Error" << std::endl;
+				return;
+			}
+			while (std::getline(ifs, line)){
+				line = cleanLine(line);
+				res = split(line, " ");
+				this->_mimesTypes[res[1]] = res[0];
+			}
+			(ifs).close();
 		}
 		/***************************************************
 		********************    SET   **********************
@@ -51,10 +74,12 @@ class ServerWeb
 				if (this->_fdmax < this->_VServs[i]->get_fd())
 					this->_fdmax = this->_VServs[i]->get_fd();
 				for (size_t j = 0; j < this->_VServs[i]->get_clients().size(); j++){
-					FD_SET(this->_VServs[i]->get_client(j)->get_fd(), &this->_readfds);
-					FD_SET(this->_VServs[i]->get_client(j)->get_fd(), &this->_writefds);
-					if (this->_fdmax < this->_VServs[i]->get_client(j)->get_fd())
-						this->_fdmax = this->_VServs[i]->get_client(j)->get_fd();
+					if (!this->_VServs[i]->get_client(j)->CGIIsRunning()){
+						FD_SET(this->_VServs[i]->get_client(j)->get_fd(), &this->_readfds);
+						FD_SET(this->_VServs[i]->get_client(j)->get_fd(), &this->_writefds);
+						if (this->_fdmax < this->_VServs[i]->get_client(j)->get_fd())
+							this->_fdmax = this->_VServs[i]->get_client(j)->get_fd();
+					}
 				}
 			}
 		}
@@ -62,18 +87,17 @@ class ServerWeb
 		/***************************************************
 		*******************    WAIT   **********************
 		***************************************************/
-		int																waitForSelect(void){
-			int activity;
+		void															waitForSelect(void){
 			struct timeval			timeout;
 
-			timeout.tv_sec = 10;
-			timeout.tv_usec = 0;
+			timeout.tv_sec = 0;
+			timeout.tv_usec = 5000;
 			// this->_writefds = this->_readfds;
-			while ((activity = select(this->_fdmax + 1, &this->_readfds , &this->_writefds , NULL , NULL)) == -1){
+			this->_nbActivity = 1;
+			while ((this->_nbActivity = select(this->_fdmax + 1, &this->_readfds , &this->_writefds , NULL , &timeout)) == -1){
 			}
-			if ((activity < 0) && (errno != EINTR))  
+			if ((this->_nbActivity < 0) && (errno != EINTR))  
 				printf("select error");
-			return (activity);
 		}
 		int																verifFdFDISSET(int fd){
 			// << YELLOW << "on test fd : " << fd << " result wr = " << FD_ISSET(fd, &this->_writefds) << FD_ISSET(fd, &this->_readfds) << std::endl;
@@ -126,13 +150,39 @@ class ServerWeb
 			FD_ZERO(&this->_writefds);
 			this->_fdmax = 0;
 		}
+		int																checkEndCGI(void){
+				int stillRunning = 0;
+			for (size_t i = 0; i < this->_VServs.size(); i++){
+				for (size_t j = 0; j < this->_VServs[i]->get_clients().size(); j++){
+					if (this->_VServs[i]->get_client(j)->CGIIsRunning()){
+						stillRunning++;
+						if (waitpid(this->_VServs[i]->get_client(j)->get_req()->get_PID(), this->_VServs[i]->get_client(j)->get_req()->get_Status(), WNOHANG) == this->_VServs[i]->get_client(j)->get_req()->get_PID()){
+							stillRunning--;
+							this->_VServs[i]->get_client(j)->get_req()->sendForCGI();
+							this->_VServs[i]->get_client(j)->get_req()->setCGI(0);
+							this->_VServs[i]->get_client(j)->new_req();
+						}
+					}
+				}
+			}
+			return (stillRunning);
+		}
+		void															dec_nbActivity(void){
+			this->_nbActivity--;
+		}
+		void															delLastVS(void){
+			this->_VServs.pop_back();
+		}
+
 
 	private:
 		std::vector<std::string> 										_file;
 		std::vector<VirtualServer*> 									_VServs;
 		int																_fdmax;
+		int																_nbActivity;
 		fd_set		 													_readfds;
 		fd_set		 													_writefds;
+		std::map<std::string, std::string>								_mimesTypes;
 };
 
 #endif

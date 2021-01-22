@@ -3,8 +3,8 @@
 #define EXECUTION_H
 
 #include "Header.hpp"
-#include "VirtualServer.hpp"
 #include "Request.hpp"
+#include "VirtualServer.hpp"
 
 class Execution
 {
@@ -12,14 +12,14 @@ class Execution
 		Execution(void){
 			this->vserv = NULL;
 			this->req = NULL;
-			this->header = NULL;
+			this->req = NULL;
 			this->file = 1;
 		}
-		Execution(ServerWeb *serv, VirtualServer *vserv, Request *req, HeaderRequest *header, char **envs){
+		Execution(ServerWeb *serv, VirtualServer *vserv, Request *req, char **envs){
 			this->serv = serv;
 			this->vserv = vserv;
 			this->req = req;
-			this->header = header;
+			this->req->updateURI(this->getFullPath());
 			this->_envs = envs;
 			this->file = 1;
 		}
@@ -80,12 +80,13 @@ class Execution
 				std::vector<std::string>	vec;
 				size_t						index;
 
-				this->header->updateContent("Content-Type", "text/html");
+				this->req->updateContent("Content-Type", "text/html");
 				vec = this->vserv->findIndex(this->req->get_uri());
 				files = listFilesInFolder(this->findFullPath());
 				for (size_t i = 0; i < vec.size(); i++){
 					if ((index = searchInVec(vec[i], files)) != -1){//Compare index with files in Folder
 						this->req->setUri(this->req->get_uri() + files[index]); //Return new URI with the index
+						this->req->updateURI(this->getFullPath());
 						this->req->setPathInfo();
 						return (0);
 					}
@@ -100,10 +101,10 @@ class Execution
 							autoindex += "<a href=\"" + this->req->get_uri() + files[j] +"\">" + files[j] + "</a><br/>";
 						autoindex += "</pre><hr>";
 						autoindex += "</body></html>";
-					this->header->basicHeaderFormat(this->req);
-					this->header->basicHistory(this->vserv, this->req);
-					this->header->updateContent("Content-Length", NumberToString(autoindex.size()));
-					this->header->sendHeader(this->req);
+					this->req->basicHeaderFormat();
+					// this->req->basicHistory(this->vserv);
+					this->req->updateContent("Content-Length", NumberToString(autoindex.size()));
+					this->req->sendHeader();
 					this->req->sendPacket(autoindex);
 				}
 				else
@@ -112,36 +113,65 @@ class Execution
 			}
 			return (0);
 		}
+		void										searchErrors(std::string error){
+			std::string line;
+			std::ifstream	ifs("srcs/error.conf");
+			std::string response;
+			if (ifs.fail()){
+				std::cerr << "Reading Error" << std::endl;
+				return;
+			}
+			while (std::getline(ifs, line) )
+				if (line.substr(0, 3) == error)
+					break;
+			(ifs).close();
+
+			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), error);
+	
+			this->req->ErrorsHeaderFormat(this->getAllowMethods(), line);
+			if (redir.empty()){
+				response = "<html><head><title>" + line + "</title></head><body bgcolor=\"white\"><center><h1>" + line + "</h1></center><hr><center>Les Poldters Server Web</center></html>";
+				this->req->updateContent("Content-Length", NumberToString(response.size()));
+				this->req->sendHeader();
+				if (this->req->get_method() != "HEAD")
+					req->sendPacket(response);
+			}
+			else{
+				this->req->sendHeader();
+				if (this->req->get_method() != "HEAD")
+					req->sendPacket(fileToString(redir));
+			} 
+		}
 		void										searchError404(void){
 			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), "404");
 
-			this->header->updateContent("HTTP/1.1", "404 Not Found");
-			this->header->updateContent("Content-Type", "text/html");
-			this->header->basicHistory(this->vserv, this->req);
+			this->req->updateContent("HTTP/1.1", "404 Not Found");
+			this->req->updateContent("Content-Type", "text/html");
+			// this->req->basicHistory(this->vserv);
 			if (redir.empty()){
-				this->header->updateContent("Content-Length", "159");
-				this->header->sendHeader(this->req);
+				this->req->updateContent("Content-Length", "159");
+				this->req->sendHeader();
 				req->sendPacket("<html><head><title>404 Not Found</title></head><body bgcolor=\"white\"><center><h1>404 Not Found</h1></center><hr><center>Les Poldters Server Web</center></html>");
 				
 			}
 			else{
-				this->header->sendHeader(this->req);
+				this->req->sendHeader();
 				req->sendPacket(fileToString(redir));
 			}
 		}
 		void										searchError405(void){
 			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), "405");
 		
-			this->header->Error405HeaderFormat(this->req, this->getAllowMethods());
-			this->header->basicHistory(this->vserv, this->req);
+			this->req->Error405HeaderFormat(this->getAllowMethods());
+			// this->req->basicHistory(this->vserv);
 			if (redir.empty()){
-				this->header->updateContent("Content-Length", "177");
-				this->header->sendHeader(this->req);
+				this->req->updateContent("Content-Length", "177");
+				this->req->sendHeader();
 				if (this->req->get_method() != "HEAD")
 					req->sendPacket("<html><head><title>405 Method Not Allowed</title></head><body bgcolor=\"white\"><center><h1>405 Method Not Allowed</h1></center><hr><center>Les Poldters Server Web</center></html>");
 			}
 			else{
-				this->header->sendHeader(this->req);
+				this->req->sendHeader();
 				if (this->req->get_method() != "HEAD")
 					req->sendPacket(fileToString(redir));
 			} 
@@ -171,32 +201,32 @@ class Execution
 			if (!opfile.is_open())
 				return (0);
 			long long unsigned int size_file = getSizeFileBits(tmp);
-			char 				*content = (char *)calloc(sizeof(char), size_file + 1);
-			this->header->basicHeaderFormat(this->req);
-			this->header->basicHistory(this->vserv, this->req);
-			this->header->updateContent("Content-Length", NumberToString(size_file));
+			char *content = (char *)calloc(sizeof(char), size_file + 1);
+			this->req->basicHeaderFormat();
+			//this->req->basicHistory(this->vserv);
+			this->req->updateContent("Content-Length", NumberToString(size_file));
 			if (this->req->get_method() == "HEAD")
-				this->header->updateContent("Content-Length", "0");
-			this->header->sendHeader(this->req);
+				this->req->updateContent("Content-Length", "0");
+			this->req->sendHeader();
 			if (this->req->get_method() != "HEAD") {
 				opfile.read(content, size_file);
 				req->sendPacket(content, size_file);
 			}
 			opfile.close();
+			free(content);
 			return (1);
 		}
 
 		/***************************************************
 		********************    CGI    *********************
 		***************************************************/
-
  		std::map<std::string, std::string>			setMetaCGI(std::string script_name){
 			std::map<std::string, std::string> args;
 			if (this->req->get_Parsing()->getMap().size() > 0) {
 				std::map<std::string, std::string> tmpmap = this->req->get_Parsing()->getMap();
 				std::map<std::string, std::string>::iterator it = tmpmap.begin();
 
-				while (it != tmpmap.end() && it->first == "\n\r") { // Deuxieme condition a vérifier
+				while (it != tmpmap.end()) { // Deuxieme condition a vérifier
 					if (it->first != "First" && !it->first.empty())
 						args.insert(std::make_pair(("HTTP_" + it->first), it->second));
 					it++;
@@ -212,10 +242,10 @@ class Execution
 			else
 				args["CONTENT_TYPE"] = req->getContentMimes();
 			args["CONTENT_LENGTH"] = req->getContentLength();
+			if (this->req->get_method() == "POST")
+				args["CONTENT_LENGTH"] = NumberToString(this->req->get_datas().size()) ;
 			if (req->getQueryString() != "")
 				args["QUERY_STRING"] = req->getQueryString();
-			else if (req->get_datas() != "")
-				args["QUERY_STRING"] = req->get_datas();
 			else
 				args["QUERY_STRING"];
 			args["SERVER_NAME"] = this->req->get_host();
@@ -227,84 +257,76 @@ class Execution
 			args["GATEWAY_INTERFACE"] = "CGI/1.1";
 			args["REMOTE_USER"] = this->req->get_authCredential();
 			args["REMOTE_IDENT"] = this->req->get_authCredential();
+			args["REDIRECT_STATUS"] = "200";
 			args["PATH_INFO"] = this->req->get_uri();
-			args["PATH_TRANSLATED"] = "./" + this->vserv->get_root() + this->req->get_uri();
+			args["REDIRECT_STATUS"] = "200";
+			args["PATH_TRANSLATED"] = this->vserv->get_root() + this->req->get_uri();
 			return (args);
 		}
 		char **										swapMaptoChar(std::map<std::string, std::string> args){
 			char	**tmpargs = (char**)malloc(sizeof(char*) * (args.size() + 1));
 			size_t	i = 0;
 			tmpargs[args.size()] = 0;
-
 			for (std::map<std::string, std::string>::iterator it = args.begin(); it != args.end(); it++)
 				tmpargs[i++] = strdup((it->first + "=" + it->second).c_str());
 			tmpargs[i] = 0;
 			return (tmpargs);
 		}
-		void										sendHeaderCGI(int fd){
-			std::string buff = "";
-			char line[2048];
-			int ret;
-
-			while ((ret = read(fd, &line, 2046)) > 0){
-				line[ret] = '\0';
-				buff += std::string(line);
-			}
-			if (buff.find("\r\n\r\n") != SIZE_MAX)
-				buff = &buff[buff.find("\r\n\r\n") + 4];
-			this->header->basicHeaderFormat(this->req);
-			this->header->updateContent("Content-Length", NumberToString(buff.size()));
-			this->header->sendHeader(this->req);
-			this->req->sendPacket(buff);
-		}
-		void										sendHeaderCGItest(int fd){
-			std::string buff = "";
-			char line[2048];
-			int ret;
-
-			while ((ret = read(fd, &line, 2046)) > 0){
-				line[ret] = '\0';
-				buff += std::string(line);
-			}
-			if (buff.find("\r\n\r\n") != SIZE_MAX)
-				buff = &buff[buff.find("\r\n\r\n") + 4];
+		void										CreateTmpRequestCGI(std::string tmp_in){
+			std::ofstream in (tmp_in.c_str());
+			if (this->req->get_method() == "POST")
+				in << this->req->get_datas();
+			std::ifstream fichier (this->get_fullPath().c_str());
+			std::string contenu;
+			while (getline(fichier, contenu))
+				in << contenu;
+			fichier.close();
+			in.close();
 		}
 		void										processCGI(std::string cgi_path, char **args){
 			int  pfd[2];
-			int  pid;
 			char **env = mergeArrays(args, this->_envs, 0);
-			int status;
-			char **tmp = (char**)malloc(sizeof(char*) * 1);
-			std::cout << "Bonjouuuuuuuuuuur" << std::endl;
-			tmp[0] = strdup(cgi_path.c_str());
 
-			// int tmp_fd2 = open("./tmp/tmp.txt", O_CREAT | O_RDONLY);
-			// sendHeaderCGI(tmp_fd2);
+			char **tmp = (char**)malloc(sizeof(char*) * 3);
+			tmp[0] = strdup(cgi_path.c_str());
+			tmp[1] = NULL;
+			tmp[2] = NULL;
+
+			std::string tmp_in = "./tmp/tmp_in_" + NumberToString(this->req->getfd()) + ".txt";
+			std::string tmp_out = "./tmp/tmp_out_" + NumberToString(this->req->getfd()) + ".txt";
 			if (pipe(pfd) == -1)
-				return ; // error gestion
-			if ((pid = fork()) < 0)
-				return ; // error gestion
-			if (pid == 0) {
+				return ; // error pipe
+			pid_t pid = fork();
+				
+			if (pid < 0)
+				return ; // error fork
+			if (pid == 0) { // in the fork child
 				close(pfd[1]);
-				pfd[0] = open(this->get_fullPath().c_str(), O_RDONLY);
+				CreateTmpRequestCGI(tmp_in);
+				//Open and send request to EXEC
+				pfd[0]= open(tmp_in.c_str(), O_CREAT | O_RDONLY, 0777);
 				dup2(pfd[0], 0); // ici en entrée mettre le body
-				int tmp_fd = open("./tmp/tmp.txt", O_CREAT | O_WRONLY);
+				//Create a receive request in EXEC
+				close(pfd[0]);
+				remove(tmp_in.c_str());
+				int tmp_fd = open(tmp_out.c_str(), O_CREAT | O_WRONLY, 0777);
 				dup2(tmp_fd, 1);
 				errno = 0;
 				if (execve(cgi_path.c_str(), tmp, env) == -1){
 					std::cerr << "Error with CGI: " << strerror(errno) << std::endl;
 					exit(1);
 				}
+				// close(pfd[0]);
+				close(tmp_fd);
 			}
 			else {
 				close(pfd[0]);
-				waitpid(pid, &status,0);
+				this->req->setCGI(1);
+				this->req->setPID(pid);
 			}
-			int tmp_fd2 = open("./tmp/tmp.txt", O_CREAT | O_RDONLY);
-			sendHeaderCGI(tmp_fd2);
-			close(tmp_fd2);
 			free(tmp[0]);
 			free(tmp);
+			free(env);
 		}
 		int											initCGI(void){
 			std::string extension = (this->req->getExtension().find(".", 0) != SIZE_MAX) ? this->req->getExtension() : "." + this->req->getExtension();
@@ -313,25 +335,42 @@ class Execution
 				if (fileIsOpenable(path)){
 					std::map<std::string, std::string> args = setMetaCGI(path);
 					char **tmpargs = swapMaptoChar(args);
-					std::cout << "youoooooooooooooo" << std::endl;
 					processCGI(path, tmpargs);
-					for (size_t i = 0; tmpargs[i]; i++){
+					for (size_t i = 0; tmpargs[i]; i++)
 						free(tmpargs[i]);
-					}
 					free(tmpargs);
-					
 					return (1);
 				}
 			}
 			return (0);
 		}
-		int											doPut(void) {
+		int											doAuthenticate(void) {
+			std::vector<std::string> option = this->vserv->findOption("Authenticate", this->req->get_uri(), this->vserv->get_authenticate());
 			
+			if (!option.empty() && option.size() == 3) {
+				if (!this->req->get_authType().empty() && !this->req->get_authCredential().empty()) {
+					if (this->req->get_authType() == "Basic") {
+						std::string tmp = decode64(this->req->get_authCredential());
+						std::vector<std::string> elements = split(tmp, ":");
+						if (elements.size() == 2 && elements[0] == option[1] && elements[1] == option[2]) {
+							return (0);
+						}
+					}
+				}
+				this->req->basicAuthentificate(option[0]);
+				this->req->updateContent("Content-Length", "80");
+				this->req->sendHeader();
+				this->req->sendPacket("<html><head><title>Unauthorized</title></head><body><h1>Unauthorized</h1></body>");
+				return (1);
+			}
+			return (0);
+		}
+		int											doPut(void) {
 			if (this->req->get_method() == "PUT") {
 				std::string path = this->get_fullPath();
 				std::string newFileName = (path[path.length() - 1] == '/') ? path.substr(0, path.length() - 1) : path;
 				std::ofstream	newFile(newFileName.c_str());
-				std::string newFileContent = this->req->parsingPut();
+				std::string newFileContent = this->req->get_requestBody();
 
 				if (newFile.fail())
 					return (0);
@@ -339,12 +378,34 @@ class Execution
 				std::string root = this->vserv->get_root();
 				std::string headerLoc = (path.find(root) != SIZE_MAX) ? &path[root.length()] : path;
 				if (!newFileContent.empty())
-					this->header->updateContent("HTTP/1.1", "201 Created");
+					this->req->updateContent("HTTP/1.1", "201 Created");
 				else
-					this->header->updateContent("HTTP/1.1", "204 No Content");
-				this->header->updateContent("Content-Location", headerLoc);
-				this->header->updateContent("Content-Length", "0");
-				this->header->sendHeader(req);
+					this->req->updateContent("HTTP/1.1", "204 No Content");
+				this->req->updateContent("Content-Location", headerLoc);
+				this->req->updateContent("Content-Length", "0");
+				this->req->sendHeader();
+				newFile.close();
+				return (1);
+			}
+			return (0);
+		}
+		int											doPost(void) {
+			if (this->req->get_method() == "POST") {
+				this->req->getDatas();
+				this->req->basicHeaderFormat();
+				this->req->updateContent("HTTP/1.1", "200 OK");
+				std::string maxbody = this->vserv->findOption("maxBody", this->req->get_uri(), this->vserv->get_maxBody());
+				if (!maxbody.empty() && std::strtoul(maxbody.c_str(), NULL, 10) < this->req->get_datas().size()){
+					this->req->updateContent("HTTP/1.1", "413 Request Entity Too Large");
+					this->req->updateContent("Content-Length", "0");
+					this->req->sendHeader();
+					return (1);
+				}
+				if (initCGI() == 0){
+					this->req->updateContent("Content-Length", NumberToString(this->req->get_requestBody().size()));
+					this->req->sendHeader();
+					this->req->sendPacket(this->req->get_requestBody());
+				}
 				return (1);
 			}
 			return (0);
@@ -357,26 +418,39 @@ class Execution
 				std::string headerLoc = (path.find(root) != SIZE_MAX) ? &path[root.length()] : path;
 
 				if (!std::remove(newFileName .c_str())) {
-					this->header->updateContent("HTTP/1.1", "200 OK");
-					this->header->updateContent("Content-Location", headerLoc);
-					this->header->updateContent("Content-Length", "48");
-					this->header->sendHeader(req);
+					this->req->updateContent("HTTP/1.1", "200 OK");
+					this->req->updateContent("Content-Location", headerLoc);
+					this->req->updateContent("Content-Length", "48");
+					this->req->sendHeader();
 					this->req->sendPacket("<html><body><h1>File deleted.</h1></body></html>");
 					return (1);
 				}
-				this->header->updateContent("HTTP/1.1", "204 No Content");
-				this->header->updateContent("Content-Location", headerLoc);
-				this->header->updateContent("Content-Length", "0");
-				this->header->sendHeader(req);
+				this->req->updateContent("HTTP/1.1", "204 No Content");
+				this->req->updateContent("Content-Location", headerLoc);
+				this->req->updateContent("Content-Length", "0");
+				this->req->sendHeader();
 				return (1);
 			}
 			return (0);
 		}
+		int											doOptions(void) {
+			
+			if (this->req->get_method() == "OPTIONS") {
+				if (this->req->get_url() == "*")
+					this->req->updateContent("Allow", "GET, POST, PUT, CONNECT, OPTIONS, HEAD, TRACE");
+				else
+					this->req->updateContent("Allow", getAllowMethods());
+				this->req->updateContent("Content-Length", "0");
+				this->req->sendHeader();
+				return (1);
+			}
+			return (0);
+		}
+	
 		/***************************************************
 		*****************    Operation    ******************
 		***************************************************/
 		int											needRedirection(void){
-
 			this->_fullPath = this->findFullPath();
 			if (fileIsOpenable(this->_fullPath) && !folderIsOpenable(this->_fullPath))
 				return (0);
@@ -389,12 +463,8 @@ class Execution
 					return (0);
 				else{
 					uri.push_back('/');
-					this->header->RedirectionHeaderFormat(this->req, uri);
-					this->header->basicHistory(this->vserv, this->req);
-					this->header->updateContent("Content-Length", "0");
-					this->header->sendHeader(this->req);
-					std::cout << "CHECK URI AFTER REDIRECT " << uri << std::endl;
-					return (1);
+					this->req->setUri(uri);
+					return (0);
 				}
 			}
 			return (0);
@@ -408,19 +478,26 @@ class Execution
 			return (ret);
 		}
 		bool										checkMethod(void){
-			if (this->vserv->findCGI(this->req->get_uri(), this->req->getExtension(), this->req->get_method()) == "bad_method")
-				return (false);
-			return (this->vserv->findMethod(this->req->get_uri(), this->req->get_method()));
+			if (!fileIsOpenable(this->get_fullPath()) && this->req->get_method() != "POST" && this->req->get_method() != "PUT"){
+				this->searchError404();
+				return 1;
+			}
+			if (this->vserv->findCGI(this->req->get_uri(), this->req->getExtension(), this->req->get_method()) == "bad_method" ||
+			!this->vserv->findMethod(this->req->get_uri(), this->req->get_method())){
+				this->searchError405();
+				return 1;
+			}
+			return 0;
 		}
 
 	private:
-		ServerWeb *			serv;
-		VirtualServer *		vserv;
-		Request * 			req;
-		HeaderRequest *		header;
-		std::string 		_fullPath;
-		char **				_envs;
-		bool				file;
+		ServerWeb *									serv;
+		VirtualServer *								vserv;
+		Request * 									req;
+		std::string 								_fullPath;
+		char **										_envs;
+		bool										file;
+
 };
 #endif
 

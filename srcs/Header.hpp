@@ -2,6 +2,7 @@
 #define HEADER_H
 
 #include <stdio.h>
+#include <signal.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -69,5 +70,7 @@ std::string 							replaceStr(std::string line, std::string s1, std::string s2);
 std::string 							replaceStrStart(std::string line, std::string s1, std::string s2);
 std::string								getfilename(std::string uri);
 std::string								CleanBody(std::string request);
+std::string								decode64(const std::string &in);
+std::string								CleanBody(std::string request, std::string contentType);
 
 #endif

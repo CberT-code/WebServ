@@ -2,7 +2,6 @@
 #define VIRTUALSERVER_HPP
 
 #include "./Header.hpp"
-#include "Request.hpp"
 #include "Client.hpp"
 
 class VirtualServer
@@ -12,19 +11,24 @@ class VirtualServer
 			initAddr(AF_INET, INADDR_ANY, htons(PORT));
 		}
 		VirtualServer(std::vector<std::string> file){
+			this->_fd = 0;
 			this->_conf = file;
 			this->_root = "./public";
+			// this->_autoIndex = 1;
 			this->parsing();
 			this->verifications();
 			initAddr(AF_INET, INADDR_ANY, htons(atoi(this->_listen.c_str())));
 			initFd(AF_INET , SOCK_STREAM , 0);
 			initLink();
-			initListen(4);
+			initListen(1024);
 		}
 		VirtualServer(VirtualServer const &rhs){
 			operator=(rhs);
 		}
-		virtual ~VirtualServer(void){}
+		virtual ~VirtualServer(void){
+			if (this->_fd != 0)
+				close(this->_fd );
+		}
 		VirtualServer &														operator=( VirtualServer const &rhs){
 			if (this != &rhs){
 			}
@@ -101,7 +105,8 @@ class VirtualServer
 		std::vector<std::string>											findOption(std::string option, std::string uri, std::vector<std::string> global){
 			std::vector<size_t> indexs;
 			std::vector<std::string> result;
-
+			if (uri.rfind('/') != uri.size() - 1)
+				uri.push_back('/');
 			indexs = findLocationsAndSublocations(uri);
 			for (size_t i = 0; i < indexs.size(); i++) {
 				if (indexs[i] != SIZE_MAX && !this->_locations[indexs[i]][option].empty()) {
@@ -117,7 +122,8 @@ class VirtualServer
 		std::string															findOption(std::string option, std::string uri, std::string global){
 			size_t index;
 			std::string result;
-
+			if (uri.rfind('/') != uri.size() - 1)
+				uri.push_back('/');
 			index = findLocation(uri);
 			if (index != SIZE_MAX && !this->_locations[index][option].empty()) //If we find the option, we split in vector
 				result = this->_locations[index][option][0];
@@ -143,7 +149,7 @@ class VirtualServer
 		std::string															findErrorPage(std::string path, size_t number){
 			return (findErrorPage(path)[number]);
 		}
-		std::string															findErrorPage(std::string path, std::string error){
+		/*std::string															findErrorPage(std::string path, std::string error){
 			std::vector<std::string> vec = findMethod(path);
 			for (size_t i = 0; i < vec.size(); i++){
 				if (vec[i] == error){
@@ -154,7 +160,19 @@ class VirtualServer
 				}
 			}
 			return ("");
+		}*/
+		std::string															findErrorPage(std::string path, std::string error){
+			int i = findLocation(path);
+			if (i >= 0){
+				for (size_t j = 0; j < this->_locations[i]["error_page"].size(); j++)
+					if (this->_locations[i]["error_page"][j] == error)
+						return (this->_locations[i]["error_page"][this->_locations[i]["error_page"].size() - 1]);
+			}
+			if (!this->_errorPage.empty())
+				return (this->_errorPage[0]);
+			return ("");
 		}
+
 		std::string															findRoot(std::string path){
 			std::string result;
 
@@ -172,6 +190,8 @@ class VirtualServer
 			return (findIndex(path)[number]);
 		}
 		std::vector<std::string>											findMethod(std::string path){
+			if (path.rfind('/') != path.size() - 1)
+				path.push_back('/');
 			std::vector<std::string> result;
 			result = this->findOption("method", path, this->get_method());
 			return (result);
@@ -180,6 +200,8 @@ class VirtualServer
 			return (findMethod(path)[number]);
 		}
 		bool																findMethod(std::string path, std::string method){
+			if (path.rfind('/') != path.size() - 1)
+					path.push_back('/');
 			std::vector<std::string> vec = findMethod(path);
 			if (!vec.empty())
 			{
@@ -244,6 +266,9 @@ class VirtualServer
 			}
 			return ("");
 		}
+		std::vector<std::string>											get_authenticate(void) {
+			return (split(this->_authenticate, " "));
+		}
 		std::vector<Client *>												get_clients(void){
 			return (this->_clients);
 		}
@@ -283,6 +308,9 @@ class VirtualServer
 		std::string															get_serverNames(void){
 			return (this->_serverNames);
 		}
+		std::string															get_maxBody(void){
+			return (this->_maxBody);
+		}
 		Client *															get_client(int i){
 			return (this->_clients[i]);
 		}
@@ -296,7 +324,10 @@ class VirtualServer
 		void																setClient(Client *client){
 			return (this->_clients.push_back(client));
 		}
-
+		void																setServerNameClients(void) {
+			for (size_t i = 0; i < this->_clients.size(); i++)
+				this->_clients[i]->get_req()->setServerName(this->_serverNames);
+		}
 		/***************************************************
 		********************    DEL   **********************
 		***************************************************/
@@ -322,6 +353,7 @@ class VirtualServer
 			this->parsingMethods();
 			this->parsingMaxBody();
 			this->parsingCGI();
+			this->parsingAuthenticate();
 		}
 		void																parsingAutoIndex(void){
 			unsigned int cpt = 0;
@@ -441,6 +473,20 @@ class VirtualServer
 					std::vector<std::string> results = split(iss, " ");
 					results.erase(results.begin());
 					this->_serverNames = results[0];
+				}
+			}
+		}
+		void																parsingAuthenticate(void){
+			size_t cpt = 0;
+			for (size_t i = 0; i < this->_conf.size(); i++){
+				if (this->_conf[i].find("{") != SIZE_MAX)
+					cpt++;
+				else if (this->_conf[i].find("}") != SIZE_MAX)
+					cpt--;
+				if (this->_conf[i].find("Authenticate") != SIZE_MAX && cpt == 1){
+					std::string iss = this->_conf[i];
+					this->_authenticate = this->_conf[i];
+					this->_authenticate = this->_authenticate.erase(0, 13);
 				}
 			}
 		}
@@ -662,6 +708,9 @@ class VirtualServer
 			}
 			return (true);
 		}
+		void														delLastClient(void){
+			this->_clients.pop_back();
+		}
 
 	private:
 		struct sockaddr_in 													_address;
@@ -679,6 +728,7 @@ class VirtualServer
 		std::string															_root;
 		std::string															_serverNames;
 		std::vector<Client *>												_clients;
+		std::string															_authenticate;
 };
 
 #endif

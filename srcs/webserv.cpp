@@ -4,8 +4,9 @@
 #include "ServerWeb.hpp" 
 #include "VirtualServer.hpp" 
 #include "Request.hpp" 
-#include "HeaderRequest.hpp" 
 #include "Execution.hpp" 
+
+ServerWeb *serv = new ServerWeb;
 
 int			checkArgs(int argc, char **argv, std::string *defaultConf, ServerWeb *serv){
 	*defaultConf = "srcs/default.conf";
@@ -14,70 +15,86 @@ int			checkArgs(int argc, char **argv, std::string *defaultConf, ServerWeb *serv
 		*defaultConf = std::string(argv[1]);
 	std::ifstream	ifs((*defaultConf).c_str());
 	if (ifs.fail()){
-		std::cerr << "Reading Error" << std::endl;
+		std::cerr << "Reading Error 1" << std::endl;
 		return (0);
 	}
 	serv->fileToVectorAndClean(&ifs);
+	ifs.close();
 	return (1);
 }
 
 void		Exec(ServerWeb *serv, Client *client, int i, char **env){
 	Request *req = client->get_req();
-	HeaderRequest *header = new HeaderRequest();
-	Execution exec = Execution(serv, serv->getVS(i), req, header, env);
+	client->setHistory(NumberToString(client->get_fd()), client->get_req()->get_uri());
+	Execution exec = Execution(serv, serv->getVS(i), req, env);
 	std::string Method = req->get_method();
-	if (Method == "POST"){
-		std::cout << GREEN << "BEFORE GET DATAS" << RESET << std::endl;
-		req->getDatas();
-		std::cout << BLUE << "AFTER GET DATAS" << RESET << std::endl;
+	if (!exec.needRedirection() && !exec.doAuthenticate() && !exec.checkMethod() && !exec.doPost() && !exec.doDelete() && !exec.doPut() && !exec.searchIndex() && !exec.initCGI() && !exec.binaryFile())
+		exec.searchError404();
+	if (!client->CGIIsRunning()){
+		client->new_req();
 	}
-	if (!exec.checkMethod())
-		exec.searchError405();
-	if (!exec.needRedirection() && exec.checkMethod()){
-		std::cout << "BEFORE EXEC - " << std::endl;
-		if (!exec.doDelete() && !exec.doPut() && !exec.searchIndex() && !exec.initCGI() && !exec.binaryFile())
-			exec.searchError404();	
-	}
-	delete header;
-	client->new_req();
 }
 
+void		closeServ(int code){
+	(void)code;
+
+	serv->clearFd();
+	std::cout << std::endl << RED << "Wait end of process still runnings..." << RESET << std::endl;
+	while (serv->checkEndCGI() != 0){}
+	std::cout << RED << "Closing serveurs..." << RESET << std::endl;
+	int i;
+	int j;
+	while ((i = serv->getVSsize() - 1) != -1){
+		while ((j = serv->getVS(i)->get_clients().size() - 1) != -1){
+			delete serv->getVS(i)->get_client(j);
+			serv->getVS(i)->delLastClient();
+		}
+		delete (serv->getVS(i));
+		serv->delLastVS();
+	}
+	delete (serv);
+	exit(0);
+}
 int			main(int argc, char **argv, char **env)
 {   
-	ServerWeb *serv = new ServerWeb;
 	std::string message; 
 	std::string defaultConf;
-	int			nb_activity;
 	int 		fdClient;
 	Client 		*client;
 
 
 	defaultConf = checkArgs(argc, argv, &defaultConf, serv);
 	serv->createVServs();
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGINT, &closeServ);
 	
-	puts("Waiting for connections ...");
+	std::cout << GREEN << "Server is Running..." << RESET << std::endl;
 	while(TRUE)
 	{
 		serv->clearFd();
 		serv->setAllFDSET_fdmax();
-		nb_activity = serv->waitForSelect();
-		for (size_t i = 0; i < serv->getVSsize() && nb_activity; i++){
-
+		serv->waitForSelect();
+		for (size_t i = 0; i < serv->getVSsize() && serv->get_nbActivity(); i++){
 			//Check les sockets master
-			if (FD_ISSET(serv->getVS(i)->get_fd(), serv->get_readfds()) && nb_activity){
+			if (FD_ISSET(serv->getVS(i)->get_fd(), serv->get_readfds()) && serv->get_nbActivity()){
 				int addrlen = sizeof(serv->getVS(i)->get_address());
 				struct sockaddr_in * AddrVS = serv->getVS(i)->get_address();
-				
 				fdClient = accept(serv->getVS(i)->get_fd(), (struct sockaddr *)AddrVS, (socklen_t *)&addrlen);
-				client = new Client(fdClient);
-				serv->getVS(i)->setClient(client);
-				if (client->get_req()->init())
-					Exec(serv, client, i, env);
-				nb_activity--;
-			}
 
-			//check les clients
-			for (size_t j = 0; j < serv->getVS(i)->get_clients().size() && nb_activity; j++){
+				client = new Client(fdClient, serv->get_mimesTypes());
+				serv->getVS(i)->setClient(client);
+				serv->getVS(i)->setServerNameClients();
+				int ret = client->get_req()->init();
+				if (ret > 0)
+					Exec(serv, client, i, env);
+				else if (ret == -1){
+					serv->getVS(i)->delClient(client);
+					delete client;
+				}
+				serv->dec_nbActivity();
+				serv->checkEndCGI();
+			}
+			for (size_t j = 0; j < serv->getVS(i)->get_clients().size() && serv->get_nbActivity(); j++){
 				client = serv->getVS(i)->get_client(j);
 				if (serv->verifFdFDISSET(client->get_fd())){
 					int ret = client->get_req()->init();
@@ -87,10 +104,12 @@ int			main(int argc, char **argv, char **env)
 						serv->getVS(i)->delClient(client);
 						delete client;
 					}
-					nb_activity--;
+					serv->dec_nbActivity();
+					serv->checkEndCGI();
 				}
 			}
 		}
+		serv->checkEndCGI();
 	}
 	return 0;
 }
