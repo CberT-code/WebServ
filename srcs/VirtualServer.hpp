@@ -149,7 +149,7 @@ class VirtualServer
 		std::string															findErrorPage(std::string path, size_t number){
 			return (findErrorPage(path)[number]);
 		}
-		std::string															findErrorPage(std::string path, std::string error){
+		/*std::string															findErrorPage(std::string path, std::string error){
 			std::vector<std::string> vec = findMethod(path);
 			for (size_t i = 0; i < vec.size(); i++){
 				if (vec[i] == error){
@@ -160,7 +160,19 @@ class VirtualServer
 				}
 			}
 			return ("");
+		}*/
+		std::string															findErrorPage(std::string path, std::string error){
+			int i = findLocation(path);
+			if (i >= 0){
+				for (size_t j = 0; j < this->_locations[i]["error_page"].size(); j++)
+					if (this->_locations[i]["error_page"][j] == error)
+						return (this->_locations[i]["error_page"][this->_locations[i]["error_page"].size() - 1]);
+			}
+			if (!this->_errorPage.empty())
+				return (this->_errorPage[0]);
+			return ("");
 		}
+
 		std::string															findRoot(std::string path){
 			std::string result;
 
@@ -312,7 +324,10 @@ class VirtualServer
 		void																setClient(Client *client){
 			return (this->_clients.push_back(client));
 		}
-
+		void																setServerNameClients(void) {
+			for (size_t i = 0; i < this->_clients.size(); i++)
+				this->_clients[i]->get_req()->setServerName(this->_serverNames);
+		}
 		/***************************************************
 		********************    DEL   **********************
 		***************************************************/

@@ -249,7 +249,9 @@ class Request{
 			else
 				this->_pathInfo = (this->_extension.find("/") != SIZE_MAX) ? &this->_extension[this->_extension.find("/") + 1] : "";
 		}
-
+		void												setServerName(std::string serverName){
+			this->_serverName = serverName;
+		}
 		/***************************************************
 		*******************    SEND   **********************
 		***************************************************/
@@ -409,6 +411,12 @@ class Request{
 			this->addContent("Date", getTime());
 			this->contentType();
 		}
+		void												ErrorsHeaderFormat(std::string allowMethods, std::string errorMsg){
+			this->basicHeaderFormat();
+			this->updateContent("HTTP/1.1", errorMsg);
+			this->updateContent("Content-Type", "text/html");
+			this->addContent("Allow", allowMethods);
+		}
 		void												Error405HeaderFormat(std::string allowMethods){
 			this->basicHeaderFormat();
 			this->updateContent("HTTP/1.1", "405 Method Not Allowed");
@@ -504,6 +512,7 @@ private :
 		std::vector<std::string>							_acceptLanguage;
 		std::vector<std::string>							_acceptCharset;
 		char *												buffer;
+		std::string 										_serverName;
 };
 
 #endif

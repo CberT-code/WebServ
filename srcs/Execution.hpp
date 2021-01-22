@@ -114,6 +114,35 @@ class Execution
 			}
 			return (0);
 		}
+		void										searchErrors(std::string error){
+			std::string line;
+			std::ifstream	ifs("srcs/error.conf");
+			std::string response;
+			if (ifs.fail()){
+				std::cerr << "Reading Error" << std::endl;
+				return;
+			}
+			while (std::getline(ifs, line) )
+				if (line.substr(0, 3) == error)
+					break;
+			(ifs).close();
+
+			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), error);
+	
+			this->req->ErrorsHeaderFormat(this->getAllowMethods(), line);
+			if (redir.empty()){
+				response = "<html><head><title>" + line + "</title></head><body bgcolor=\"white\"><center><h1>" + line + "</h1></center><hr><center>Les Poldters Server Web</center></html>";
+				this->req->updateContent("Content-Length", NumberToString(response.size()));
+				this->req->sendHeader();
+				if (this->req->get_method() != "HEAD")
+					req->sendPacket(response);
+			}
+			else{
+				this->req->sendHeader();
+				if (this->req->get_method() != "HEAD")
+					req->sendPacket(fileToString(redir));
+			} 
+		}
 		void										searchError404(void){
 			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), "404");
 

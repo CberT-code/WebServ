@@ -97,6 +97,7 @@ int			main(int argc, char **argv, char **env)
 
 				client = new Client(fdClient, serv->get_mimesTypes());
 				serv->getVS(i)->setClient(client);
+				serv->getVS(i)->setServerNameClients();
 				int ret = client->get_req()->init();
 				if (ret > 0)
 					Exec(serv, client, i, env);
