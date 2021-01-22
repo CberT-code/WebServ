@@ -20,6 +20,10 @@ int			checkArgs(int argc, char **argv, std::string *defaultConf, ServerWeb *serv
 	}
 	serv->fileToVectorAndClean(&ifs);
 	ifs.close();
+	if (!folderIsOpenable("./tmp")) {
+		std::cerr << "Folder Error : no ./tmp folder in this repository" << std::endl;
+		return (0);
+	}
 	return (1);
 }
 
@@ -28,7 +32,16 @@ void		Exec(ServerWeb *serv, Client *client, int i, char **env){
 	client->setHistory(NumberToString(client->get_fd()), client->get_req()->get_uri());
 	Execution exec = Execution(serv, serv->getVS(i), req, env);
 	std::string Method = req->get_method();
-	if (!exec.needRedirection() && !exec.doAuthenticate() && !exec.checkMethod() && !exec.doPost() && !exec.doDelete() && !exec.doPut() && !exec.searchIndex() && !exec.initCGI() && !exec.binaryFile())
+	std::cout << "HOSTS COMP " << req->get_host() << " TO " << serv->getVS(i)->get_serverNames() << std::endl;
+	if (serv->getVS(i)->get_serverNames().find(req->get_host()) == SIZE_MAX) {
+		req->basicHeaderFormat();
+		req->updateContent("HTTP/1.1", "400 Bad Request Error");
+		req->updateContent("Content-Length", "0");
+		req->sendHeader();
+		std::cout << "400 Bad Request Error" << std::endl;
+		return ;
+	}
+	if (!exec.needRedirection() && !exec.doTrace() && !exec.doOptions() && !exec.doAuthenticate() && !exec.checkMethod() && !exec.doPost() && !exec.doDelete() && !exec.doPut() && !exec.searchIndex() && !exec.initCGI() && !exec.binaryFile())
 		exec.searchError404();
 	if (!client->CGIIsRunning()){
 		client->new_req();
@@ -63,7 +76,8 @@ int			main(int argc, char **argv, char **env)
 	Client 		*client;
 
 
-	defaultConf = checkArgs(argc, argv, &defaultConf, serv);
+	if (!checkArgs(argc, argv, &defaultConf, serv))
+		return (-1);
 	serv->createVServs();
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGINT, &closeServ);
@@ -86,7 +100,7 @@ int			main(int argc, char **argv, char **env)
 				int ret = client->get_req()->init();
 				if (ret > 0)
 					Exec(serv, client, i, env);
-				else if (ret == -1){
+				else if (ret == -1 || client->get_req()->get_error() == -1){
 					serv->getVS(i)->delClient(client);
 					delete client;
 				}

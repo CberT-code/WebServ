@@ -458,6 +458,8 @@ class VirtualServer
 					std::vector<std::string> results = split(iss, " ");
 					results.erase(results.begin());
 					this->_serverNames = results[0];
+					if (results[0] == "localhost")
+						this->_serverNames = results[0] + " 127.0.0.1";
 				}
 			}
 		}
@@ -714,6 +716,7 @@ class VirtualServer
 		std::string															_serverNames;
 		std::vector<Client *>												_clients;
 		std::string															_authenticate;
+		std::string															_servername;
 };
 
 #endif

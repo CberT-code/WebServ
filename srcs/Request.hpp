@@ -8,6 +8,7 @@ class Request{
 	public:
 		Request(){
 			this->_fd = 0;
+			this->_error = 0;
 			this->buffer = NULL;
 			this->_CGI = 0;
 			this->total = 0;
@@ -24,6 +25,7 @@ class Request{
 			this->endHeader = 0;
 		}
 		Request(int fd, std::map<std::string, std::string> mineTypes){
+			this->_error = 0;
 			this->_fd = fd;
 			this->buffer = NULL;
 			this->_CGI = 0;
@@ -63,6 +65,7 @@ class Request{
 			this->buffer = (char *)calloc(sizeof(char), 9999999);
 			size = recv(this->_fd, this->buffer, 9999999, MSG_DONTWAIT);
 			this->total += size; 
+			std::cout << RED << this->buffer << RESET << std::endl;
 			if (size == 0){
 				free(this->buffer);
 				this->buffer = NULL;
@@ -76,7 +79,8 @@ class Request{
 			this->_request += this->buffer;
 			free(this->buffer);
 			this->buffer = NULL;
-			//Verification du header
+			//std::cout << "____ REQUEST ____" << std::endl << this->_request << std::endl << "____ END REQUEST ____" << std::endl;
+			//Verification du header 
 			if (this->findend == 0){
 				if ((this->endHeader = this->_request.find("\r\n\r\n")) != SIZE_MAX){
 					this->findend = 1; 
@@ -86,6 +90,8 @@ class Request{
 				else
 					return (0);
 			}
+			if (this->findend == 0 &&  this->getContentMimes().find("boundary=") != SIZE_MAX && this->getContentMimes().find("multipart/form-data;") != SIZE_MAX)
+				return (0);
 			if (this->findend == 2 && (this->endHeader == this->_request.size() - 4 || this->_request.compare(this->_request.size() - 4, 4, "\r\n\r\n") != 0))
 				return (0);
 			this->_requestHeader = this->_request.substr(0, this->_request.find("\r\n\r\n") + 4);
@@ -188,8 +194,11 @@ class Request{
 		pid_t												get_PID(void){
 			return (this->pid);
 		}
-		int *												get_Status(void){
+		int													*get_Status(void){
 			return (&this->status);
+		}
+		int													get_error(void) const {
+			return (this->_error);
 		}
 		size_t												getSize(void) const{
 			return (this->_content.size());
@@ -244,11 +253,19 @@ class Request{
 		/***************************************************
 		*******************    SEND   **********************
 		***************************************************/
-		void												sendPacket(std::string content){
-			send(this->_fd, content.c_str(), content.size(), MSG_CONFIRM);
+		int													sendPacket(std::string content){
+			if (send(this->_fd, content.c_str(), content.size(), MSG_CONFIRM) == -1) {
+				this->status = -1;
+				return (-1);
+			}
+			return (1);
 		}
-		void												sendPacket(char *content, size_t len){
-			send(this->_fd, content, len, MSG_CONFIRM);
+		int													sendPacket(char *content, size_t len){
+			if (send(this->_fd, content, len, MSG_CONFIRM) == -1) {
+				this->status = -1;
+				return (-1);
+			}
+			return (1);
 		}
 
 		/***************************************************
@@ -332,7 +349,7 @@ class Request{
 		/***************************************************
 		******************    Parsing   ********************
 		***************************************************/
-		void												parsingMetasVars(void){
+		void												parsingMetasVars(void) {
 			this->_hostName = this->_parsing->getMap()["Host"].substr(0, this->_parsing->getMap()["Host"].find_first_of(":"));
 			this->_hostPort = &this->_parsing->getMap()["Host"][this->_parsing->getMap()["Host"].find_first_of(":") + 1];
 			this->_userAgent = this->_parsing->getMap()["User-Agent"];
@@ -372,7 +389,8 @@ class Request{
 			rep.erase(rep.size() - 1);
 			rep.erase(rep.size() - 1);
 			rep += "\n\n";
-			sendPacket(rep.c_str());
+			if (sendPacket(rep.c_str()) == -1)
+				return ;
 		}
 		void												contentType() {
 			this->updateContent("Content-Type", "text/html");
@@ -455,6 +473,7 @@ class Request{
 private :
 		int													_fd;
 		int													_CGI;
+		int													_error;
 		size_t												total;
 
 		std::string											_request;
