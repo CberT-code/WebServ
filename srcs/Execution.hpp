@@ -109,7 +109,7 @@ class Execution
 						return (0);
 				}
 				else
-					searchError404();
+					searchErrors("404");
 				return (1);
 			}
 			return (0);
@@ -126,7 +126,6 @@ class Execution
 				if (line.substr(0, 3) == error)
 					break;
 			(ifs).close();
-
 			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), error);
 	
 			this->req->ErrorsHeaderFormat(this->getAllowMethods(), line);
@@ -138,49 +137,52 @@ class Execution
 					req->sendPacket(response);
 			}
 			else{
+				std::string body = fileToString(this->vserv->get_root() + "/" + redir);
+				this->req->updateContent("Content-Length", NumberToString(body.size() - 1));
 				this->req->sendHeader();
-				if (this->req->get_method() != "HEAD")
-					req->sendPacket(fileToString(redir));
+				if (this->req->get_method() != "HEAD"){
+					req->sendPacket(body);
+				}
 			} 
 		}
-		void										searchError404(void){
-			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), "404");
+		// void										searchError404(void){
+		// 	std::string redir = this->vserv->findErrorPage(this->req->get_uri(), "404");
 
-			this->req->updateContent("HTTP/1.1", "404 Not Found");
-			this->req->updateContent("Content-Type", "text/html");
-			// this->req->basicHistory(this->vserv);
-			if (redir.empty()){
-				this->req->updateContent("Content-Length", "159");
-				this->req->sendHeader();
-				if (req->sendPacket("<html><head><title>404 Not Found</title></head><body bgcolor=\"white\"><center><h1>404 Not Found</h1></center><hr><center>Les Poldters Server Web</center></html>") == -1)
-					return ;
+		// 	this->req->updateContent("HTTP/1.1", "404 Not Found");
+		// 	this->req->updateContent("Content-Type", "text/html");
+		// 	// this->req->basicHistory(this->vserv);
+		// 	if (redir.empty()){
+		// 		this->req->updateContent("Content-Length", "159");
+		// 		this->req->sendHeader();
+		// 		if (req->sendPacket("<html><head><title>404 Not Found</title></head><body bgcolor=\"white\"><center><h1>404 Not Found</h1></center><hr><center>Les Poldters Server Web</center></html>") == -1)
+		// 			return ;
 				
-			}
-			else{
-				this->req->sendHeader();
-				if (req->sendPacket(fileToString(redir)) == -1)
-					return ;
-			}
-		}
-		void										searchError405(void){
-			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), "405");
+		// 	}
+		// 	else{
+		// 		this->req->sendHeader();
+		// 		if (req->sendPacket(fileToString(redir)) == -1)
+		// 			return ;
+		// 	}
+		// }
+		// void										searchError405(void){
+		// 	std::string redir = this->vserv->findErrorPage(this->req->get_uri(), "405");
 		
-			this->req->Error405HeaderFormat(this->getAllowMethods());
-			// this->req->basicHistory(this->vserv);
-			if (redir.empty()){
-				this->req->updateContent("Content-Length", "177");
-				this->req->sendHeader();
-				if (this->req->get_method() != "HEAD")
-					if (req->sendPacket("<html><head><title>405 Method Not Allowed</title></head><body bgcolor=\"white\"><center><h1>405 Method Not Allowed</h1></center><hr><center>Les Poldters Server Web</center></html>") == -1)
-						return ;
-			}
-			else{
-				this->req->sendHeader();
-				if (this->req->get_method() != "HEAD")
-					if (req->sendPacket(fileToString(redir)) == -1)
-						return ;
-			} 
-		}
+		// 	this->req->Error405HeaderFormat(this->getAllowMethods());
+		// 	// this->req->basicHistory(this->vserv);
+		// 	if (redir.empty()){
+		// 		this->req->updateContent("Content-Length", "177");
+		// 		this->req->sendHeader();
+		// 		if (this->req->get_method() != "HEAD")
+		// 			if (req->sendPacket("<html><head><title>405 Method Not Allowed</title></head><body bgcolor=\"white\"><center><h1>405 Method Not Allowed</h1></center><hr><center>Les Poldters Server Web</center></html>") == -1)
+		// 				return ;
+		// 	}
+		// 	else{
+		// 		this->req->sendHeader();
+		// 		if (this->req->get_method() != "HEAD")
+		// 			if (req->sendPacket(fileToString(redir)) == -1)
+		// 				return ;
+		// 	} 
+		// }
 
 		/***************************************************
 		*****************    OpenFiles    ******************
@@ -242,7 +244,7 @@ class Execution
 				}
 			}
 			args["AUTH_TYPE"] = req->get_authType();
-			args["SERVER_SOFTWARE"] = "webserv";
+			args["SERVER_SOFTWARE"] = req->get_servername();
 			args["SERVER_PROTOCOL"] = "HTTP/1.1";
 			if (req->getContentMimes() == "" && this->openText())
 				args["CONTENT_TYPE"] = "text/plain";
@@ -503,12 +505,12 @@ class Execution
 		}
 		bool										checkMethod(void){
 			if (!fileIsOpenable(this->get_fullPath()) && this->req->get_method() != "POST" && this->req->get_method() != "PUT"){
-				this->searchError404();
+				this->searchErrors("404");
 				return 1;
 			}
 			if (this->vserv->findCGI(this->req->get_uri(), this->req->getExtension(), this->req->get_method()) == "bad_method" ||
 			!this->vserv->findMethod(this->req->get_uri(), this->req->get_method())){
-				this->searchError405();
+				this->searchErrors("405");
 				return 1;
 			}
 			return 0;

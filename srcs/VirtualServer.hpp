@@ -168,8 +168,9 @@ class VirtualServer
 					if (this->_locations[i]["error_page"][j] == error)
 						return (this->_locations[i]["error_page"][this->_locations[i]["error_page"].size() - 1]);
 			}
-			if (!this->_errorPage.empty())
-				return (this->_errorPage[0]);
+			for (size_t j = 0; j < this->_errorPage.size(); j++)
+				if (this->_errorPage[j] == error)
+					return (this->_errorPage[this->_errorPage.size() - 1]);
 			return ("");
 		}
 

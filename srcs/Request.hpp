@@ -65,7 +65,6 @@ class Request{
 			this->buffer = (char *)calloc(sizeof(char), 9999999);
 			size = recv(this->_fd, this->buffer, 9999999, MSG_DONTWAIT);
 			this->total += size; 
-			std::cout << RED << this->buffer << RESET << std::endl;
 			if (size == 0){
 				free(this->buffer);
 				this->buffer = NULL;
@@ -79,7 +78,6 @@ class Request{
 			this->_request += this->buffer;
 			free(this->buffer);
 			this->buffer = NULL;
-			//std::cout << "____ REQUEST ____" << std::endl << this->_request << std::endl << "____ END REQUEST ____" << std::endl;
 			//Verification du header 
 			if (this->findend == 0){
 				if ((this->endHeader = this->_request.find("\r\n\r\n")) != SIZE_MAX){
@@ -208,6 +206,9 @@ class Request{
 		}
 		std::string											getContent(std::string key){
 			return (this->_content[key]);
+		}
+		std::string											get_servername(void){
+			return (this->_serverName);
 		}
 		void												getDatas(void) {
 			this->_datas = this->_requestBody;
@@ -407,7 +408,7 @@ class Request{
 		void												basicHeaderFormat(){
 			this->addContent("Host", (get_host() + ":" + get_port()));
 			this->updateContent("Content-Location", get_uri());
-			this->addContent("Server", "webserv");
+			this->addContent("Server", this->_serverName);
 			this->addContent("Date", getTime());
 			this->contentType();
 		}
