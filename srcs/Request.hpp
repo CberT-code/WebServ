@@ -69,7 +69,6 @@ class Request{
 			this->buffer = (char *)calloc(sizeof(char), 9999999);
 			size = recv(this->_fd, this->buffer, 9999999, MSG_DONTWAIT);
 			this->total += size;
-			std::cout << YELLOW << size << RESET << std::endl; 
 			if (size == 0){
 				free(this->buffer);
 				this->buffer = NULL;
@@ -101,9 +100,6 @@ class Request{
 				return (0);
 			if (this->_requestHeader == "")
 				this->_requestHeader = this->_request.substr(0, this->_request.find("\r\n\r\n") + 4);
-
-						std::cout << RED << "size_body = " << size_body << RESET << std::endl;
-						std::cout << RED << "calcul = " << this->total - this->_requestHeader.size() << RESET << std::endl;
 			if (this->findend == 3 && this->total - this->_requestHeader.size() < this->size_body)
 				return (0);
 			this->_method = this->set_method();
@@ -120,7 +116,6 @@ class Request{
 			this->parsingAuthorizations();
 			this->setPathInfo();
 			this->_requestBody = CleanBody(this->_request, this->getContentMimes());
-			std::cout << this->_requestBody << std::endl;
 			return (1);
 		}
 		/***************************************************
