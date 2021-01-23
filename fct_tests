@@ -1,0 +1,4 @@
+curl -H "Host: toto" http://lespoldters:8081/
+curl -X GET http://localhost:8080/popo 
+curl -X POST -H "Content-Type: plain/test" --data "Hello la france" http://127.0.0.1:8080
+curl -I http://localhost:8080 

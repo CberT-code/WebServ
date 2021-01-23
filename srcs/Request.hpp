@@ -12,7 +12,9 @@ class Request{
 			this->buffer = NULL;
 			this->_CGI = 0;
 			this->total = 0;
+			this->size_body = 0;
 			this->_request = "";
+			this->_requestHeader = "";
 			this->_uri = "";
 			this->_typeContent = "";
 			this->_authCredentials = "";
@@ -30,7 +32,9 @@ class Request{
 			this->buffer = NULL;
 			this->_CGI = 0;
 			this->total = 0;
+			this->size_body = 0;
 			this->_request = "";
+			this->_requestHeader = "";
 			this->_uri = "";
 			this->_typeContent = "";
 			this->_authCredentials = "";
@@ -64,7 +68,8 @@ class Request{
 				time(&this->_time);
 			this->buffer = (char *)calloc(sizeof(char), 9999999);
 			size = recv(this->_fd, this->buffer, 9999999, MSG_DONTWAIT);
-			this->total += size; 
+			this->total += size;
+			std::cout << YELLOW << size << RESET << std::endl; 
 			if (size == 0){
 				free(this->buffer);
 				this->buffer = NULL;
@@ -84,15 +89,23 @@ class Request{
 					this->findend = 1; 
 					if (this->_request.find("Transfer-Encoding") != SIZE_MAX || this->_request.find("Length-Encoding") != SIZE_MAX)
 						this->findend = 2;
+					if ( this->_request.find("multipart/form-data;") != SIZE_MAX ){
+						this->findend = 3;
+						size_body = atoi(&this->_request[this->_request.find("Content-Length:") + 16]);
+					}
 				}
 				else
 					return (0);
 			}
-			if (this->findend == 0 &&  this->getContentMimes().find("boundary=") != SIZE_MAX && this->getContentMimes().find("multipart/form-data;") != SIZE_MAX)
-				return (0);
 			if (this->findend == 2 && (this->endHeader == this->_request.size() - 4 || this->_request.compare(this->_request.size() - 4, 4, "\r\n\r\n") != 0))
 				return (0);
-			this->_requestHeader = this->_request.substr(0, this->_request.find("\r\n\r\n") + 4);
+			if (this->_requestHeader == "")
+				this->_requestHeader = this->_request.substr(0, this->_request.find("\r\n\r\n") + 4);
+
+						std::cout << RED << "size_body = " << size_body << RESET << std::endl;
+						std::cout << RED << "calcul = " << this->total - this->_requestHeader.size() << RESET << std::endl;
+			if (this->findend == 3 && this->total - this->_requestHeader.size() < this->size_body)
+				return (0);
 			this->_method = this->set_method();
 			this->_parsing->parsingMap((char *)this->_requestHeader.c_str());
 			this->_parsing->parseGet();
@@ -107,6 +120,7 @@ class Request{
 			this->parsingAuthorizations();
 			this->setPathInfo();
 			this->_requestBody = CleanBody(this->_request, this->getContentMimes());
+			std::cout << this->_requestBody << std::endl;
 			return (1);
 		}
 		/***************************************************
@@ -257,14 +271,14 @@ class Request{
 		*******************    SEND   **********************
 		***************************************************/
 		int													sendPacket(std::string content){
-			if (send(this->_fd, content.c_str(), content.size(), MSG_CONFIRM) == -1) {
+			if (send(this->_fd, content.c_str(), content.size(), MSG_CONFIRM) < 1) {
 				this->status = -1;
 				return (-1);
 			}
 			return (1);
 		}
 		int													sendPacket(char *content, size_t len){
-			if (send(this->_fd, content, len, MSG_CONFIRM) == -1) {
+			if (send(this->_fd, content, len, MSG_CONFIRM) < 1) {
 				this->status = -1;
 				return (-1);
 			}
@@ -484,6 +498,7 @@ private :
 		int													_CGI;
 		int													_error;
 		size_t												total;
+		size_t												size_body;
 
 		std::string											_request;
 		std::string											_requestHeader;

@@ -36,7 +36,7 @@ void		Exec(ServerWeb *serv, Client *client, int i, char **env){
 		exec.searchErrors("400");
 		return ;
 	}
-	if (!exec.needRedirection() && !exec.doTrace() && !exec.doOptions() && !exec.doAuthenticate() && !exec.checkMethod() && !exec.doPost() && !exec.doDelete() && !exec.doPut() && !exec.searchIndex() && !exec.initCGI() && !exec.binaryFile())
+	if (!exec.needRedirection() && !exec.doTrace() && !exec.doConnect() && !exec.doOptions() && !exec.doAuthenticate() && !exec.checkMethod() && !exec.doPost() && !exec.doDelete() && !exec.doPut() && !exec.searchIndex() && !exec.initCGI() && !exec.binaryFile())
 		exec.searchErrors("404");
 	if (!client->CGIIsRunning()){
 		client->new_req();
@@ -107,7 +107,7 @@ int			main(int argc, char **argv, char **env)
 					int ret = client->get_req()->init();
 					if (ret > 0)
 						Exec(serv, client, i, env);
-					else if (ret == -1){
+					else if (ret == -1 || client->get_req()->get_error() == -1){
 						serv->getVS(i)->delClient(client);
 						delete client;
 					}

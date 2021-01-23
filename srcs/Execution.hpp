@@ -476,7 +476,16 @@ class Execution
 			}
 			return (0);
 		}
-	
+		int											doConnect(void) {
+			if (this->req->get_method() == "CONNECT") {
+				this->req->basicHeaderFormat();
+				this->req->updateContent("HTTP/1.1", "200 OK");
+				this->req->updateContent("Content-Length", "0");
+				this->req->sendHeader();
+				return (1);
+			}
+			return (0);
+		}
 		/***************************************************
 		*****************    Operation    ******************
 		***************************************************/

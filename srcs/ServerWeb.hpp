@@ -94,7 +94,7 @@ class ServerWeb
 			timeout.tv_usec = 5000;
 			// this->_writefds = this->_readfds;
 			this->_nbActivity = 1;
-			while ((this->_nbActivity = select(this->_fdmax + 1, &this->_readfds , &this->_writefds , NULL , &timeout)) == -1){
+			while ((this->_nbActivity = select(this->_fdmax + 1, &this->_readfds, &this->_writefds, NULL , &timeout)) == -1){
 			}
 			if ((this->_nbActivity < 0) && (errno != EINTR))  
 				printf("select error");
