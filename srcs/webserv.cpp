@@ -33,10 +33,7 @@ void		Exec(ServerWeb *serv, Client *client, int i, char **env){
 	Execution exec = Execution(serv, serv->getVS(i), req, env);
 	std::string Method = req->get_method();
 	if (serv->getVS(i)->get_serverNames().find(req->get_host()) == SIZE_MAX) {
-		req->basicHeaderFormat();
-		req->updateContent("HTTP/1.1", "400 Bad Request Error");
-		req->updateContent("Content-Length", "0");
-		req->sendHeader();
+		exec.searchErrors("400");
 		return ;
 	}
 	if (!exec.needRedirection() && !exec.doTrace() && !exec.doOptions() && !exec.doAuthenticate() && !exec.checkMethod() && !exec.doPost() && !exec.doDelete() && !exec.doPut() && !exec.searchIndex() && !exec.initCGI() && !exec.binaryFile())
@@ -50,7 +47,9 @@ void		closeServ(int code){
 	(void)code;
 
 	serv->clearFd();
+		std::cout << std::endl << RED << "Wait end of process still runnings..." << RESET << std::endl;
 	while (serv->checkEndCGI() != 0){}
+	std::cout << RED << "Closing serveurs..." << RESET << std::endl;
 	int i;
 	int j;
 	while ((i = serv->getVSsize() - 1) != -1){

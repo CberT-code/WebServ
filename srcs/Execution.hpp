@@ -122,28 +122,29 @@ class Execution
 				std::cerr << "Reading Error" << std::endl;
 				return;
 			}
-			while (std::getline(ifs, line) )
+			while (std::getline(ifs, line) ){
 				if (line.substr(0, 3) == error)
 					break;
+			}
 			(ifs).close();
 			std::string redir = this->vserv->findErrorPage(this->req->get_uri(), error);
 	
 			this->req->ErrorsHeaderFormat(this->getAllowMethods(), line);
 			if (redir.empty()){
 				response = "<html><head><title>" + line + "</title></head><body bgcolor=\"white\"><center><h1>" + line + "</h1></center><hr><center>Les Poldters Server Web</center></html>";
-				this->req->updateContent("Content-Length", NumberToString(response.size()));
+				size_t length = this->req->get_method() != "HEAD" ? response.size() : 0;
+				this->req->updateContent("Content-Length", NumberToString(length));
 				this->req->sendHeader();
 				if (this->req->get_method() != "HEAD")
 					req->sendPacket(response);
 			}
 			else{
-				std::string path = (this->_fullPath[this->_fullPath.size() - 1] == '/') ? this->_fullPath.substr(0, this->_fullPath.size() - 1) :  this->_fullPath;
-				while (!fileIsOpenable(path + "/" + redir) && path.find_last_of("/") != SIZE_MAX)
-					path = path.substr(0, path.find_last_of("/"));
-				path = path +"/" + redir;
-
+				std::string path = redir;
+				if (redir[0] == '/')
+					path = this->vserv->findRoot(this->req->get_uri()) + redir;
 				std::string body = fileToString(path);
-				this->req->updateContent("Content-Length", NumberToString(body.size() - 1));
+				size_t length = this->req->get_method() != "HEAD" ? body.size() : 0;
+				this->req->updateContent("Content-Length", NumberToString(length));
 				this->req->sendHeader();
 				if (this->req->get_method() != "HEAD"){
 					req->sendPacket(body);
@@ -413,9 +414,7 @@ class Execution
 				this->req->updateContent("HTTP/1.1", "200 OK");
 				std::string maxbody = this->vserv->findOption("maxBody", this->req->get_uri(), this->vserv->get_maxBody());
 				if (!maxbody.empty() && std::strtoul(maxbody.c_str(), NULL, 10) < this->req->get_datas().size()){
-					this->req->updateContent("HTTP/1.1", "413 Request Entity Too Large");
-					this->req->updateContent("Content-Length", "0");
-					this->req->sendHeader();
+					this->searchErrors("413");
 					return (1);
 				}
 				if (initCGI() == 0){
