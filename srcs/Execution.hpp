@@ -137,7 +137,12 @@ class Execution
 					req->sendPacket(response);
 			}
 			else{
-				std::string body = fileToString(this->vserv->get_root() + "/" + redir);
+				std::string path = (this->_fullPath[this->_fullPath.size() - 1] == '/') ? this->_fullPath.substr(0, this->_fullPath.size() - 1) :  this->_fullPath;
+				while (!fileIsOpenable(path + "/" + redir) && path.find_last_of("/") != SIZE_MAX)
+					path = path.substr(0, path.find_last_of("/"));
+				path = path +"/" + redir;
+
+				std::string body = fileToString(path);
 				this->req->updateContent("Content-Length", NumberToString(body.size() - 1));
 				this->req->sendHeader();
 				if (this->req->get_method() != "HEAD"){
